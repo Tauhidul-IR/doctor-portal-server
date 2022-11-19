@@ -41,6 +41,24 @@ async function run() {
         const appointmentListOptionsCollection = client.db('doctorPortal').collection('appointmentList');
         const bookingCollections = client.db('doctorPortal').collection('bookingOptions');
         const usersCollections = client.db('doctorPortal').collection('users');
+        const doctorsCollections = client.db('doctorPortal').collection('doctors');
+
+
+
+
+        const verifyAdmin = async (req, res, next) => {
+            console.log(req.decoded.email);
+            const decodedEmail = req.decoded.email;
+            const query = { email: decodedEmail }
+            const user = await usersCollections.findOne(query)
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
+
+
 
 
         //use aggregate to query multiple collection and then merge data
@@ -135,14 +153,14 @@ async function run() {
 
 
         //update
-        app.put('/users/admin/:id', verifyJWT, async (req, res) => {
+        app.put('/users/admin/:id', verifyJWT, verifyAdmin, async (req, res) => {
 
-            const decodedEmail = req.decoded.email;
-            const query = { email: decodedEmail }
-            const user = await usersCollections.findOne(query)
-            if (user?.role !== 'admin') {
-                return res.status(403).send({ message: 'forbidden access' })
-            }
+            // const decodedEmail = req.decoded.email;
+            // const query = { email: decodedEmail }
+            // const user = await usersCollections.findOne(query)
+            // if (user?.role !== 'admin') {
+            //     return res.status(403).send({ message: 'forbidden access' })
+            // }
 
 
             const id = req.params.id;
@@ -158,6 +176,32 @@ async function run() {
         })
 
 
+
+        app.get('/appointmentSpecialty', async (req, res) => {
+            const query = {};
+            const result = await appointmentListOptionsCollection.find(query).project({ name: 1 }).toArray();
+            res.send(result)
+        })
+
+        //DOctors
+        app.post('/doctors', verifyJWT, verifyAdmin, async (req, res) => {
+            const doctor = req.body;
+            const result = await doctorsCollections.insertOne(doctor);
+            res.send(result);
+        })
+
+        app.get('/doctors', verifyJWT, verifyAdmin, async (req, res) => {
+            const query = {}
+            const result = await doctorsCollections.find(query).toArray();
+            res.send(result);
+        })
+
+        app.delete('/doctors/:id', verifyJWT, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: ObjectId(id) };
+            const result = await doctorsCollections.deleteOne(filter);
+            res.send(result);
+        })
 
         /**
          * simple convention for booking api
