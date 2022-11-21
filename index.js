@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 require('dotenv').config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const app = express();
 
@@ -42,6 +43,7 @@ async function run() {
         const bookingCollections = client.db('doctorPortal').collection('bookingOptions');
         const usersCollections = client.db('doctorPortal').collection('users');
         const doctorsCollections = client.db('doctorPortal').collection('doctors');
+        const paymentsCollection = client.db('doctorsPortal').collection('payments');
 
 
 
@@ -100,6 +102,16 @@ async function run() {
             const result = await bookingCollections.insertOne(booking);
             res.send(result);
         })
+
+
+        app.get('/bookings/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: ObjectId(id) }
+            const bookings = await bookingCollections.findOne(query)
+            res.send(bookings)
+        })
+
+
 
         app.get('/bookings', verifyJWT, async (req, res) => {
             const email = req.query.email
@@ -175,6 +187,21 @@ async function run() {
             res.send(result);
         })
 
+        //temporary to update price field on appointment options
+        //new data add hoye gele comment or delete korte hobe na hole bar bar add hobe.
+        /*
+        app.get('/addPrice', async (req, res) => {
+            const filter = {}
+            const options = { upsert: true }
+            const updatedDoc = {
+                $set: {
+                    price: 90
+                }
+            }
+            const result = await appointmentListOptionsCollection.updateMany(filter, updatedDoc, options)
+            res.send(result)
+        })
+        */
 
 
         app.get('/appointmentSpecialty', async (req, res) => {
@@ -202,6 +229,44 @@ async function run() {
             const result = await doctorsCollections.deleteOne(filter);
             res.send(result);
         })
+
+
+
+        //payment part---------------------
+        app.post("/create-payment-intent", async (req, res) => {
+            const booking = req.body
+            const price = booking.price
+            const amount = price * 100;
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                currency: "usd",
+                amount: amount,
+                "payment_method_types": [
+                    "card"
+                ]
+            })
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        })
+
+
+        app.post('/payments', async (req, res) => {
+            const payment = req.body;
+            const result = await paymentsCollection.insertOne(payment);
+            const id = payment.bookingId
+            const filter = { _id: ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId
+                }
+            }
+            const updatedResult = await bookingCollections.updateOne(filter, updatedDoc)
+            res.send(result);
+        })
+
+
 
         /**
          * simple convention for booking api
